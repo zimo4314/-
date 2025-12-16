@@ -1716,7 +1716,7 @@ const Archive3D = {
         // this.onJump(book_box.districtInfo.path);
         console.log(book_box.districtInfo.path)
         this.ifTurn = false;
-        this.handleShowTable(book_box.districtInfo.path)
+        this.handleShowTable(book_box.districtInfo)
       }, 3000);
     }
   },
@@ -2444,43 +2444,116 @@ const Archive3D = {
     this.actions = {};
   },
 
-  // 在需要展示表格的地方（如按钮点击事件中）调用，包含区域信息
-  handleShowTable: function(districtInfo) {
-    // 模拟表格数据，包含区域信息
-    const tableData = [
-      { id: 1, name: `${districtInfo.name}水利局`, type: '行政单位', year: '1985', staff: 120 },
-    ]
 
-    // 定义表格列配置
-    const columns = [
-      { label: '单位名称', prop: 'name', width: 200 },
-    ]
 
-    // 调用表格对话框，标题包含完整的区域信息
+
+  // 生成随机整数
+  getRandomInt: function(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  },
+
+// 1. 生成带详情的模拟数据
+  generateMockData: function(districtInfo) {
+    const districtName = districtInfo.name || '该区域';
+    const types = ['水利工程批准书', '取水许可证', '河道采砂证', '水土保持方案', '防汛调度令'];
+    const depts = ['行政审批科', '水资源科', '河湖管理科', '水土保持科', '防汛抗旱办'];
+
+    return Array.from({ length: 15 }).map((_, i) => ({
+      id: `WA-${2023001 + i}`,
+      name: `${districtName}${types[i % types.length]}档案-${i+1}`,
+      type: types[i % types.length],
+      date: `2023-${Math.floor(Math.random() * 12 + 1).toString().padStart(2, '0')}-15`,
+      department: depts[i % depts.length],
+      status: Math.random() > 0.3 ? '已归档' : '借阅中',
+      // 额外详情数据
+      details: {
+        abstract: `这是关于${districtName}水利建设的重要文件，包含详细的工程图纸和验收报告。`,
+        handler: `王${i}明`,
+        location: `A区-0${i+1}架-3层`,
+        pages: Math.floor(Math.random() * 200 + 10)
+      }
+    }));
+  },
+
+  // 2. 显示二级详情弹窗 (点击"查看"后触发)
+  showArchiveDetailDialog: function(row) {
+    // 将对象的属性转换为表格行数据
+    const detailData = [
+      { label: '档案编号', value: row.id },
+      { label: '档案名称', value: row.name },
+      { label: '档案类型', value: row.type },
+      { label: '内容摘要', value: row.details.abstract },
+      { label: '经办人', value: row.details.handler },
+      { label: '存放位置', value: row.details.location },
+      { label: '页数', value: `${row.details.pages} 页` },
+      { label: '当前状态', value: row.status }
+    ];
+
+    // 详情表的列定义
+    const detailColumns = [
+      { label: '项目', prop: 'label', width: 120 },
+      { label: '内容', prop: 'value', width: 350 }
+    ];
+
+    // 弹出二级对话框
     tableDialog.showTableDialog({
-      title: `${districtInfo}水利单位信息列表`, // 对话框标题包含完整路径
-      data: tableData,       // 表格数据
-      columns: columns,      // 列配置
-      multiple: true,        // 支持多选（false为单选）
-      width: '90%',          // 对话框宽度
-      height: '90%',       // 表格区域高度
-      // 选择完成后的回调函数
-      onSelect: (selectedRows) => {
-        if (selectedRows.length > 0) {
-          console.log('选中的数据：', selectedRows)
-          // 这里可以处理选中后的数据，如提交表单、展示详情等
-        } else {
-          console.log('未选中任何数据')
-        }
+      title: `档案详情 - ${row.name}`,
+      data: detailData,
+      columns: detailColumns,
+      width: '50%',
+      height: '500px',
+      multiple: false,
+      hideOperation: true, // 自定义参数：通知组件隐藏操作列(需要在底层支持)
+      onClose: () => {
+        console.log('详情查看结束');
+      }
+    });
+  },
+
+  // 3. 主表格入口
+  handleShowTable: function(districtInfo) {
+    const tableData = this.generateMockData(districtInfo);
+    // 处理传入参数可能是对象或字符串的情况
+    console.log("==============")
+    console.log(districtInfo.name)
+    const titlePath = districtInfo.path || districtInfo.name || districtInfo;
+
+    const columns = [
+      { label: '档案编号', prop: 'id', width: 120 },
+      { label: '档案名称', prop: 'name', width: 240 },
+      { label: '档案类型', prop: 'type', width: 140 },
+      { label: '归档日期', prop: 'date', width: 120 },
+      { label: '所属部门', prop: 'department', width: 120 },
+      { label: '状态', prop: 'status', width: 100 }
+    ];
+
+    tableDialog.showTableDialog({
+      title: `${titlePath} - 档案列表`,
+      data: tableData,
+      columns: columns,
+      multiple: true,
+      width: '75%',
+      height: '70%',
+
+      // 【关键】传入查看详情的回调函数
+      onView: (row) => {
+        this.showArchiveDetailDialog(row);
       },
+
+      onSelect: (selectedRows) => {
+        console.log('选中的档案:', selectedRows);
+      },
+
       onClose: () => {
         this.ifTurn = true;
-        for (let i = 0; i < this.archives.length; i++) {
-          this.returnBook(this.archives[i]);
-        }
+        // 将所有展示出来的书放回去
+        this.archives.forEach(book => {
+          if(book.isShow) this.returnBook(book);
+        });
       }
-    })
+    });
   }
+
 };
 
 // 初始化函数
